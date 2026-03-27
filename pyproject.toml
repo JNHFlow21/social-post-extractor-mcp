@@ -3,18 +3,18 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "douyin-mcp-server"
-version = "1.4.0"
+name = "social-post-extractor-mcp"
+version = "0.1.0"
 description = "MCP server for extracting scripts and metadata from Douyin and XiaoHongShu posts"
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "Apache-2.0"}
 authors = [
-    {name = "yzfly", email = "yz.liu.me@gmail.com"}
+    {name = "JNHFlow21", email = "JNHFlow21@users.noreply.github.com"}
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -34,9 +34,10 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yzfly/douyin-mcp-server"
-Repository = "https://github.com/yzfly/douyin-mcp-server"
-Issues = "https://github.com/yzfly/douyin-mcp-server/issues"
+Homepage = "https://github.com/JNHFlow21/social-post-extractor-mcp"
+Repository = "https://github.com/JNHFlow21/social-post-extractor-mcp"
+Issues = "https://github.com/JNHFlow21/social-post-extractor-mcp/issues"
 
 [project.scripts]
+social-post-extractor-mcp = "social_post_extractor_mcp.server:main"
 douyin-mcp-server = "douyin_mcp_server.server:main"

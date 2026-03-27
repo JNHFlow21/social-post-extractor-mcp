@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from douyin_mcp_server.social_extractor import (
+from social_post_extractor_mcp.social_extractor import (
     ExtractionContext,
     OpenAICompatibleASRProvider,
     SocialExtractorService,
@@ -247,9 +247,9 @@ class SocialExtractorServiceTests(unittest.TestCase):
                 },
                 clear=False,
             ),
-            patch("douyin_mcp_server.social_extractor.download_binary") as download_binary,
-            patch("douyin_mcp_server.social_extractor.extract_audio") as extract_audio,
-            patch("douyin_mcp_server.social_extractor.transcribe_audio_via_upload") as transcribe_audio_via_upload,
+            patch("social_post_extractor_mcp.social_extractor.download_binary") as download_binary,
+            patch("social_post_extractor_mcp.social_extractor.extract_audio") as extract_audio,
+            patch("social_post_extractor_mcp.social_extractor.transcribe_audio_via_upload") as transcribe_audio_via_upload,
         ):
             download_binary.return_value = Path("/tmp/demo.mp4")
             extract_audio.return_value = Path("/tmp/demo.mp3")

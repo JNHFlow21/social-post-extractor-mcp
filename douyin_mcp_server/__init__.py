@@ -1,12 +1,5 @@
-"""Short video and social post extraction MCP server."""
+"""Backward-compatible shim for the renamed package."""
 
-__version__ = "1.3.0"
-__author__ = "yzfly"
-__email__ = "yz.liu.me@gmail.com"
+from social_post_extractor_mcp import __author__, __email__, __version__, main
 
-def main():
-    from .server import main as server_main
-
-    return server_main()
-
-__all__ = ["main"]
+__all__ = ["main", "__version__", "__author__", "__email__"]

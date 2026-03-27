@@ -86,7 +86,7 @@ python3 -m unittest discover -s tests
 启动 MCP：
 
 ```bash
-uv run python -m douyin_mcp_server
+uv run python -m social_post_extractor_mcp
 ```
 
 ## 环境变量
