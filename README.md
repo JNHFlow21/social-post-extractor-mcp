@@ -52,16 +52,20 @@
 
 ## 推荐配置
 
-如果你希望视频转写和图文整理都走火山体系，建议这样拆：
+如果你希望整套配置尽量简单、直接、好用、快速，建议默认收敛到百炼：
 
-- `ASR_PROVIDER=volcengine_speech`
-- `VISION_PROVIDER=doubao`
-- `CLEAN_PROVIDER=doubao`
+- `ASR_PROVIDER=bailian`
+- `ASR_MODEL=paraformer-v2`
+- `VISION_PROVIDER=bailian`
+- `VISION_MODEL=qwen3-vl-flash`
+- `CLEAN_PROVIDER=bailian`
+- `CLEAN_MODEL=qwen-flash`
 
 其中：
 
-- `volcengine_speech` 使用火山语音服务的 `App ID + Access Token`
-- `doubao` 使用方舟 `API Key`
+- `paraformer-v2` 负责视频 ASR
+- `qwen3-vl-flash` 负责小红书图文图片读字
+- `qwen-flash` 只做轻整理：分段、标点、少量明显错字修正
 
 ## 快速开始
 
@@ -99,24 +103,16 @@ uv run python -m social_post_extractor_mcp
 - Vision
 - Cleanup
 
-火山语音识别需要：
+推荐直接使用百炼：
 
 ```bash
-ASR_PROVIDER=volcengine_speech
-VOLCENGINE_SPEECH_APP_ID=your_app_id
-VOLCENGINE_SPEECH_ACCESS_TOKEN=your_access_token
-VOLCENGINE_SPEECH_RESOURCE_ID=volc.seedasr.sauc.duration
-VOLCENGINE_SPEECH_WS_URL=wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
-```
-
-豆包视觉与清理可使用：
-
-```bash
-VISION_PROVIDER=doubao
-VISION_MODEL=doubao-1-5-vision-pro-32k-250115
-CLEAN_PROVIDER=doubao
-CLEAN_MODEL=doubao-1-5-pro-32k-250115
-ARK_API_KEY=your_ark_api_key
+ASR_PROVIDER=bailian
+ASR_MODEL=paraformer-v2
+VISION_PROVIDER=bailian
+VISION_MODEL=qwen3-vl-flash
+CLEAN_PROVIDER=bailian
+CLEAN_MODEL=qwen-flash
+BAILIAN_API_KEY=your_api_key
 ```
 
 ## 许可证

@@ -6,6 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from social_post_extractor_mcp.social_extractor import (
+    DEFAULT_ASR_MODEL,
+    DEFAULT_ASR_PROVIDER,
+    DashScopeASRProvider,
     ExtractionContext,
     OpenAICompatibleASRProvider,
     SocialExtractorService,
@@ -13,6 +16,7 @@ from social_post_extractor_mcp.social_extractor import (
     build_volcengine_request_payload,
     build_volcengine_audio_request,
     build_volcengine_full_client_request,
+    default_model_for_provider,
     parse_volcengine_server_message,
     XHSStateParser,
     provider_asr_config,
@@ -63,6 +67,12 @@ class FailingAsrProvider:
 
 
 class SocialExtractorServiceTests(unittest.TestCase):
+    def test_defaults_prefer_bailian_simple_stack(self):
+        self.assertEqual(DEFAULT_ASR_PROVIDER, "bailian")
+        self.assertEqual(DEFAULT_ASR_MODEL, "paraformer-v2")
+        self.assertEqual(default_model_for_provider("bailian", "vision"), "qwen3-vl-flash")
+        self.assertEqual(default_model_for_provider("bailian", "cleanup"), "qwen-flash")
+
     def test_default_asr_registry_includes_bailian_and_doubao(self):
         service = SocialExtractorService(
             platform_adapters=[],
@@ -74,6 +84,51 @@ class SocialExtractorServiceTests(unittest.TestCase):
         self.assertIn("bailian", service.asr_providers)
         self.assertIn("doubao", service.asr_providers)
         self.assertIn("volcengine_speech", service.asr_providers)
+        self.assertIsInstance(service.asr_providers["bailian"], DashScopeASRProvider)
+
+    def test_default_provider_resolution_prefers_bailian_for_vision_and_cleanup(self):
+        service = SocialExtractorService(
+            platform_adapters=[],
+            cleanup_providers={},
+            vision_providers={},
+            ocr_provider=FakeOcrProvider(),
+        )
+
+        with patch.dict("os.environ", {"BAILIAN_API_KEY": "demo-key"}, clear=False):
+            self.assertEqual(service._default_vision_provider(), "bailian")
+            self.assertEqual(service._default_cleanup_provider(), "bailian")
+
+    def test_info_uses_resolved_default_models_for_vision_and_cleanup(self):
+        post = SocialPost(
+            platform="xiaohongshu",
+            content_type="image_note",
+            source_url="https://www.xiaohongshu.com/demo",
+            resolved_url="https://www.xiaohongshu.com/demo",
+            post_id="xhs-demo",
+            title="测试图文",
+            body="正文",
+            image_urls=["https://cdn.example.com/1.jpg"],
+        )
+        service = SocialExtractorService(
+            platform_adapters=[FakePlatformAdapter(post)],
+            cleanup_providers={"bailian": FakeCleanupProvider("整理后的脚本")},
+            vision_providers={"bailian": FakeOcrProvider()},
+            ocr_provider=FakeOcrProvider(),
+        )
+
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            patch.dict("os.environ", {"BAILIAN_API_KEY": "demo-key"}, clear=False),
+        ):
+            result = service.extract_social_post(
+                "https://www.xiaohongshu.com/demo",
+                output_dir=tmpdir,
+            )
+
+        self.assertEqual(result["info"]["vision_provider"], "bailian")
+        self.assertEqual(result["info"]["vision_model"], "qwen3-vl-flash")
+        self.assertEqual(result["info"]["clean_provider"], "bailian")
+        self.assertEqual(result["info"]["clean_model"], "qwen-flash")
 
     def test_video_post_writes_script_and_info_files(self):
         post = SocialPost(

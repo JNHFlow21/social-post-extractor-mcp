@@ -22,7 +22,7 @@ _SERVICE = SocialExtractorService()
 
 def _detect_legacy_asr_provider(model: Optional[str]) -> str:
     if model and "paraformer" in model.lower():
-        return "dashscope"
+        return "bailian"
     return os.getenv("ASR_PROVIDER") or DEFAULT_ASR_PROVIDER
 
 

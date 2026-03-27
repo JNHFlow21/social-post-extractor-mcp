@@ -35,8 +35,10 @@ DOUYIN_MOBILE_HEADERS = {
     )
 }
 
-DEFAULT_ASR_PROVIDER = "siliconflow"
-DEFAULT_ASR_MODEL = "FunAudioLLM/SenseVoiceSmall"
+DEFAULT_ASR_PROVIDER = "bailian"
+DEFAULT_ASR_MODEL = "paraformer-v2"
+DEFAULT_VISION_PROVIDER = "bailian"
+DEFAULT_CLEAN_PROVIDER = "bailian"
 
 VISION_PROMPT = (
     "请逐字提取这张图片里可见的所有文字。保持原有的段落、列表、标题和换行。"
@@ -48,13 +50,14 @@ OCR_FALLBACK_PROMPT = (
     "不要总结，不要改写，不要补全。"
 )
 
-CLEANUP_PROMPT_TEMPLATE = """你要把短视频/图文内容整理成一份可读但尽量完整的脚本。
+CLEANUP_PROMPT_TEMPLATE = """你要对短视频/图文内容做轻量整理，只提升可读性，不改写内容。
 
 要求：
-1. 不能丢失关键信息，不要做摘要式压缩。
-2. 可以按自然段整理语序，但不要编造不存在的内容。
-3. 保留原文中的关键口头表达、术语、清单和操作步骤。
-4. 输出纯文本，不要加解释。
+1. 不能丢失信息，不能新增信息，不能做摘要。
+2. 只允许做这几类处理：补标点、分段、修正极明显的错别字、去除重复空行。
+3. 不要改写句子意思，不要重组结构，不要润色成另一种文风。
+4. 保留原文中的口头表达、术语、清单和操作步骤。
+5. 输出纯文本，不要加解释。
 
 标题：{title}
 平台：{platform}
@@ -305,7 +308,7 @@ class SocialExtractorService:
         self.asr_providers = asr_providers or {
             "siliconflow": SiliconFlowASRProvider(),
             "dashscope": DashScopeASRProvider(),
-            "bailian": OpenAICompatibleASRProvider("bailian"),
+            "bailian": DashScopeASRProvider(),
             "doubao": OpenAICompatibleASRProvider("doubao"),
             "volcengine_speech": VolcengineSpeechASRProvider(),
         }
@@ -341,9 +344,27 @@ class SocialExtractorService:
                 or DEFAULT_ASR_MODEL
             ),
             vision_provider=vision_provider or os.getenv("VISION_PROVIDER") or self._default_vision_provider(),
-            vision_model=vision_model or os.getenv("VISION_MODEL"),
-            clean_provider=clean_provider or os.getenv("CLEAN_PROVIDER"),
-            clean_model=clean_model or os.getenv("CLEAN_MODEL"),
+            vision_model=None,
+            clean_provider=clean_provider or os.getenv("CLEAN_PROVIDER") or self._default_cleanup_provider(),
+            clean_model=None,
+        )
+        context.vision_model = (
+            vision_model
+            or os.getenv("VISION_MODEL")
+            or (
+                default_model_for_provider(context.vision_provider, "vision")
+                if context.vision_provider
+                else None
+            )
+        )
+        context.clean_model = (
+            clean_model
+            or os.getenv("CLEAN_MODEL")
+            or (
+                default_model_for_provider(context.clean_provider, "cleanup")
+                if context.clean_provider
+                else None
+            )
         )
 
         raw_transcript = None
@@ -481,7 +502,15 @@ class SocialExtractorService:
     def _default_vision_provider(self) -> Optional[str]:
         if os.getenv("VISION_PROVIDER"):
             return os.getenv("VISION_PROVIDER")
-        for candidate in ("qwen", "bailian", "doubao", "minimax", "generic"):
+        for candidate in ("bailian", "qwen", "doubao", "minimax", "generic"):
+            if provider_credentials(candidate):
+                return candidate
+        return None
+
+    def _default_cleanup_provider(self) -> Optional[str]:
+        if os.getenv("CLEAN_PROVIDER"):
+            return os.getenv("CLEAN_PROVIDER")
+        for candidate in ("bailian", "qwen", "doubao", "minimax", "generic"):
             if provider_credentials(candidate):
                 return candidate
         return None
@@ -881,10 +910,10 @@ def default_model_for_provider(provider_name: str, purpose: str) -> Optional[str
         return os.getenv(env_name)
     defaults = {
         ("bailian", "asr"): "paraformer-v2",
-        ("qwen", "vision"): "qwen-vl-max-latest",
-        ("qwen", "cleanup"): "qwen-max-latest",
-        ("bailian", "vision"): "qwen-vl-max-latest",
-        ("bailian", "cleanup"): "qwen-max-latest",
+        ("qwen", "vision"): "qwen3-vl-flash",
+        ("qwen", "cleanup"): "qwen-flash",
+        ("bailian", "vision"): "qwen3-vl-flash",
+        ("bailian", "cleanup"): "qwen-flash",
         ("doubao", "asr"): os.getenv("DOUBAO_ASR_MODEL") or os.getenv("ARK_ASR_MODEL"),
         ("volcengine_speech", "asr"): os.getenv("VOLCENGINE_SPEECH_MODEL_NAME", "bigmodel"),
         ("doubao", "vision"): "doubao-vision-pro-32k",
