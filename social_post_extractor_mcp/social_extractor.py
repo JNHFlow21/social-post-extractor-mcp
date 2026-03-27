@@ -944,17 +944,13 @@ def parse_volcengine_server_message(message: bytes) -> dict[str, Any]:
     is_final = (message_code & 0x0F) in (0x2, 0x3)
 
     if message_type == 0x90:
-        if len(payload) < 8:
-            raise ValueError("火山语音返回的响应体长度不足")
-        sequence = int.from_bytes(payload[0:4], "big", signed=True)
-        payload_size = int.from_bytes(payload[4:8], "big")
-        payload_bytes = payload[8 : 8 + payload_size]
+        payload_bytes, sequence = _extract_volcengine_full_response_payload(payload)
         decoded_payload = _decode_volcengine_payload(payload_bytes, serialization, compression)
         return {
             "message_type": message_type,
             "sequence": sequence,
             "payload": decoded_payload,
-            "is_final": is_final or sequence < 0,
+            "is_final": is_final or (sequence is not None and sequence < 0),
         }
 
     if message_type == 0xF0:
@@ -1019,7 +1015,7 @@ def build_volcengine_request_payload(audio_path: Path, context: ExtractionContex
     return {
         "user": {"uid": user_id},
         "audio": {
-            "format": "wav",
+            "format": "pcm",
             "codec": "raw",
             "rate": sample_rate,
             "bits": bits,
@@ -1203,6 +1199,23 @@ def _decode_volcengine_payload(payload: bytes, serialization: int, compression: 
     if not payload:
         return ""
     return payload.decode("utf-8", errors="ignore")
+
+
+def _extract_volcengine_full_response_payload(payload: bytes) -> tuple[bytes, Optional[int]]:
+    if len(payload) < 4:
+        raise ValueError("火山语音返回的响应体长度不足")
+
+    if len(payload) >= 8:
+        sequence = int.from_bytes(payload[0:4], "big", signed=True)
+        payload_size = int.from_bytes(payload[4:8], "big")
+        if payload_size <= len(payload) - 8:
+            return payload[8 : 8 + payload_size], sequence
+
+    size_only_payload_size = int.from_bytes(payload[0:4], "big")
+    if size_only_payload_size <= len(payload) - 4:
+        return payload[4 : 4 + size_only_payload_size], None
+
+    raise ValueError("火山语音返回的响应体长度不足")
 
 
 def _extract_volcengine_result_text(payload: Any) -> str:

@@ -31,6 +31,7 @@ dependencies = [
     "uvicorn",
     "jinja2",
     "websockets",
+    "python-socks",
 ]
 
 [project.urls]

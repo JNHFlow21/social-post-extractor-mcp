@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,8 +10,10 @@ from social_post_extractor_mcp.social_extractor import (
     OpenAICompatibleASRProvider,
     SocialExtractorService,
     SocialPost,
+    build_volcengine_request_payload,
     build_volcengine_audio_request,
     build_volcengine_full_client_request,
+    parse_volcengine_server_message,
     XHSStateParser,
     provider_asr_config,
     provider_volcengine_speech_config,
@@ -324,6 +327,50 @@ class VolcengineSpeechProtocolTests(unittest.TestCase):
         self.assertEqual(non_final[1], 0x20)
         self.assertEqual(non_final[2], 0x01)
         self.assertEqual(final[1], 0x22)
+
+    def test_parse_server_message_supports_size_only_payload(self):
+        payload = json.dumps({"result": {"text": "hello"}}).encode("utf-8")
+        frame = bytes([0x11, 0x90, 0x10, 0x00]) + len(payload).to_bytes(4, "big") + payload
+
+        parsed = parse_volcengine_server_message(frame)
+
+        self.assertEqual(parsed["message_type"], 0x90)
+        self.assertEqual(parsed["payload"]["result"]["text"], "hello")
+
+    def test_parse_server_message_supports_sequence_and_payload_size(self):
+        payload = json.dumps({"result": {"text": "hello-2"}}).encode("utf-8")
+        frame = (
+            bytes([0x11, 0x91, 0x10, 0x00])
+            + (3).to_bytes(4, "big", signed=True)
+            + len(payload).to_bytes(4, "big")
+            + payload
+        )
+
+        parsed = parse_volcengine_server_message(frame)
+
+        self.assertEqual(parsed["message_type"], 0x90)
+        self.assertEqual(parsed["sequence"], 3)
+        self.assertEqual(parsed["payload"]["result"]["text"], "hello-2")
+
+    def test_build_request_payload_uses_pcm_for_streaming_audio(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            wav_path = Path(tmpdir) / "demo.wav"
+            with wave.open(str(wav_path), "wb") as wav_file:
+                wav_file.setnchannels(1)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(16000)
+                wav_file.writeframes(b"\x00\x00" * 320)
+
+            payload = build_volcengine_request_payload(
+                wav_path,
+                ExtractionContext(asr_provider="volcengine_speech", asr_model="bigmodel"),
+                "user-demo",
+            )
+
+        self.assertEqual(payload["audio"]["format"], "pcm")
+        self.assertEqual(payload["audio"]["codec"], "raw")
+        self.assertEqual(payload["audio"]["rate"], 16000)
+        self.assertEqual(payload["audio"]["channel"], 1)
 
 
 class XHSStateParserTests(unittest.TestCase):

@@ -1049,6 +1049,15 @@ wheels = [
 ]
 
 [[package]]
+name = "python-socks"
+version = "2.8.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/0b/cd77011c1bc01b76404f7aba07fca18aca02a19c7626e329b40201217624/python_socks-2.8.1.tar.gz", hash = "sha256:698daa9616d46dddaffe65b87db222f2902177a2d2b2c0b9a9361df607ab3687", size = 38909, upload-time = "2026-02-16T05:24:00.745Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/15/fe/9a58cb6eec633ff6afae150ca53c16f8cc8b65862ccb3d088051efdfceb7/python_socks-2.8.1-py3-none-any.whl", hash = "sha256:28232739c4988064e725cdbcd15be194743dd23f1c910f784163365b9d7be035", size = 55087, upload-time = "2026-02-16T05:23:59.147Z" },
+]
+
+[[package]]
 name = "pywin32"
 version = "311"
 source = { registry = "https://pypi.org/simple" }
@@ -1244,6 +1253,7 @@ dependencies = [
     { name = "ffmpeg-python" },
     { name = "jinja2" },
     { name = "mcp" },
+    { name = "python-socks" },
     { name = "requests" },
     { name = "tqdm" },
     { name = "uvicorn" },
@@ -1257,6 +1267,7 @@ requires-dist = [
     { name = "ffmpeg-python" },
     { name = "jinja2" },
     { name = "mcp", specifier = ">=1.0.0" },
+    { name = "python-socks" },
     { name = "requests" },
     { name = "tqdm" },
     { name = "uvicorn" },
