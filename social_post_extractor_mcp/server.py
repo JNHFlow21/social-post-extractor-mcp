@@ -61,10 +61,13 @@ def extract_social_post_script_value(
     clean_model: Optional[str] = None,
     save_raw_segments: bool = False,
 ) -> dict:
+    # Ignore asr_provider if passed as "siliconflow" - use env var instead
+    # This ensures ASR_PROVIDER=bailian in mcporter.json takes precedence
+    resolved_asr = os.getenv("ASR_PROVIDER") if asr_provider == "siliconflow" else asr_provider
     return _SERVICE.extract_social_post(
         share_link,
         output_dir=output_dir,
-        asr_provider=asr_provider,
+        asr_provider=resolved_asr,
         asr_model=asr_model,
         vision_provider=vision_provider,
         vision_model=vision_model,
