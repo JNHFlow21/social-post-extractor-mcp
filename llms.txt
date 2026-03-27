@@ -1,0 +1,30 @@
+# Social Post Extractor MCP
+
+Short summary:
+An MCP server for extracting structured content from Douyin and Xiaohongshu links. Supports Douyin videos, Xiaohongshu video notes, and Xiaohongshu image notes. Default artifacts are script.md and info.json.
+
+Primary docs:
+- README.md
+- AGENT_REACH_INTEGRATION.md
+
+Default model stack:
+- ASR: bailian / paraformer-v2
+- Vision OCR: bailian / qwen3-vl-flash
+- Cleanup: bailian / qwen-flash
+
+Primary tools:
+- parse_social_post_info
+- extract_social_post_script
+- extract_douyin_text
+
+Key behavior:
+- extract_social_post_script is the preferred unified entrypoint
+- extract_douyin_text is kept for backward compatibility
+- cleanup should remain light and should not summarize unless the user explicitly asks
+- API keys must stay in local config or environment variables and must never be committed
+
+Recommended starting point for AI agents:
+1. Read README.md
+2. Use the default Bailian stack
+3. Prefer mcporter config in ~/.mcporter/mcporter.json when integrating with Agent Reach
+4. Write outputs to /tmp or another local artifact directory

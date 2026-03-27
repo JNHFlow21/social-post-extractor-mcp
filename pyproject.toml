@@ -5,11 +5,23 @@ build-backend = "hatchling.build"
 [project]
 name = "social-post-extractor-mcp"
 version = "0.1.0"
-description = "MCP server for extracting scripts and metadata from Douyin and XiaoHongShu posts"
+description = "MCP server for extracting scripts and metadata from Douyin and Xiaohongshu posts, including video ASR and image-note OCR"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 authors = [
     {name = "JNHFlow21", email = "JNHFlow21@users.noreply.github.com"}
+]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "douyin",
+    "xiaohongshu",
+    "rednote",
+    "transcript",
+    "asr",
+    "ocr",
+    "bailian",
+    "dashscope",
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
