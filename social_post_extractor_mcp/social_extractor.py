@@ -9,6 +9,8 @@ import re
 import tempfile
 import asyncio
 import gzip
+import mimetypes
+import time
 import uuid
 import wave
 from dataclasses import dataclass, field
@@ -39,6 +41,9 @@ DEFAULT_ASR_PROVIDER = "bailian"
 DEFAULT_ASR_MODEL = "paraformer-v2"
 DEFAULT_VISION_PROVIDER = "bailian"
 DEFAULT_CLEAN_PROVIDER = "bailian"
+DEFAULT_DASHSCOPE_SHORT_ASR_MODEL = "qwen3-asr-flash"
+DEFAULT_DASHSCOPE_LONG_ASR_MODEL = "qwen3-asr-flash-filetrans"
+DEFAULT_DASHSCOPE_SHORT_MAX_DURATION_SEC = 300
 
 VISION_PROMPT = (
     "请逐字提取这张图片里可见的所有文字。保持原有的段落、列表、标题和换行。"
@@ -375,7 +380,7 @@ class SocialExtractorService:
             try:
                 raw_transcript = self._extract_video_text(post, context)
             except Exception as exc:
-                errors.append(f"视频转写失败: {exc}")
+                raise RuntimeError(f"视频转写失败: {exc}") from exc
         else:
             image_texts, image_errors = self._extract_image_texts(post, context)
             errors.extend(image_errors)
@@ -548,27 +553,41 @@ class DashScopeASRProvider:
             raise ValueError("未设置 DashScope/Bailian API Key")
         if not post.video_url:
             raise ValueError("视频内容缺少 video_url，无法调用 DashScope ASR")
+        requested_model = _normalize_dashscope_requested_model(context.asr_model)
+        preferred_model = requested_model or _select_dashscope_cloud_asr_model(post)
 
-        import dashscope
-        from http import HTTPStatus
-        from urllib import request as urllib_request
+        try:
+            transcript = self._transcribe_via_cloud_mirror(post, api_key=api_key, model=preferred_model)
+            context.asr_model = preferred_model
+            return transcript
+        except Exception:
+            # Short-form realtime ASR has tighter limits. If the auto path picked it,
+            # retry once with the long-file async model for better robustness.
+            if requested_model is None and preferred_model == DEFAULT_DASHSCOPE_SHORT_ASR_MODEL:
+                fallback_model = DEFAULT_DASHSCOPE_LONG_ASR_MODEL
+                transcript = self._transcribe_via_cloud_mirror(post, api_key=api_key, model=fallback_model)
+                context.asr_model = fallback_model
+                return transcript
+            raise
 
-        dashscope.api_key = api_key
-        model = context.asr_model or "paraformer-v2"
-        task_response = dashscope.audio.asr.Transcription.async_call(
-            model=model,
-            file_urls=[post.video_url],
-            language_hints=["zh", "en"],
+    def _transcribe_via_cloud_mirror(self, post: SocialPost, *, api_key: str, model: str) -> str:
+        oss_url = stream_remote_media_to_dashscope_oss(
+            source_url=post.video_url,
+            api_key=api_key,
+            model_name=model,
+            filename_hint=_default_dashscope_media_filename(post),
         )
-        transcription_response = dashscope.audio.asr.Transcription.wait(task=task_response.output.task_id)
-        if transcription_response.status_code != HTTPStatus.OK:
-            raise RuntimeError(transcription_response.output.message)
-        for transcription in transcription_response.output["results"]:
-            payload = json.loads(urllib_request.urlopen(transcription["transcription_url"]).read().decode("utf8"))
-            transcripts = payload.get("transcripts") or []
-            if transcripts:
-                return transcripts[0].get("text", "")
-        return ""
+        if model == DEFAULT_DASHSCOPE_SHORT_ASR_MODEL:
+            return run_dashscope_multimodal_asr(
+                oss_url=oss_url,
+                api_key=api_key,
+                model=model,
+            )
+        return run_dashscope_filetrans_task(
+            oss_url=oss_url,
+            api_key=api_key,
+            model=model,
+        )
 
 
 class OpenAICompatibleASRProvider:
@@ -803,6 +822,34 @@ def build_info_dict(post: SocialPost, context: ExtractionContext, *, status: str
     }
 
 
+def _normalize_dashscope_requested_model(model: Optional[str]) -> Optional[str]:
+    if model in (DEFAULT_DASHSCOPE_SHORT_ASR_MODEL, DEFAULT_DASHSCOPE_LONG_ASR_MODEL):
+        return model
+    return None
+
+
+def _select_dashscope_cloud_asr_model(post: SocialPost) -> str:
+    short_model = first_env("DASHSCOPE_SHORT_ASR_MODEL", "BAILIAN_SHORT_ASR_MODEL") or DEFAULT_DASHSCOPE_SHORT_ASR_MODEL
+    long_model = first_env("DASHSCOPE_LONG_ASR_MODEL", "BAILIAN_LONG_ASR_MODEL") or DEFAULT_DASHSCOPE_LONG_ASR_MODEL
+    max_short_duration = int(
+        first_env("DASHSCOPE_SHORT_MAX_DURATION_SEC", "BAILIAN_SHORT_MAX_DURATION_SEC")
+        or DEFAULT_DASHSCOPE_SHORT_MAX_DURATION_SEC
+    )
+    if post.duration_sec and post.duration_sec <= max_short_duration:
+        return short_model
+    return long_model
+
+
+def _default_dashscope_media_filename(post: SocialPost) -> str:
+    parsed = urlparse(post.video_url or "")
+    basename = Path(parsed.path).name
+    if basename and "." in basename:
+        return basename
+    if "video_id" in parse_qs(parsed.query):
+        return f"{parse_qs(parsed.query)['video_id'][0]}.mp4"
+    return f"{post.post_id}.mp4"
+
+
 def build_llm_provider_registry() -> dict[str, OpenAICompatibleProvider]:
     registry: dict[str, OpenAICompatibleProvider] = {}
     for provider_name in ("minimax", "qwen", "bailian", "doubao", "generic"):
@@ -926,6 +973,254 @@ def default_model_for_provider(provider_name: str, purpose: str) -> Optional[str
     return defaults.get((provider_name, purpose))
 
 
+def get_dashscope_upload_policy(api_key: str, model_name: str) -> dict[str, Any]:
+    response = requests.get(
+        "https://dashscope.aliyuncs.com/api/v1/uploads",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        params={
+            "action": "getPolicy",
+            "model": model_name,
+        },
+        timeout=60,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise RuntimeError(f"DashScope 上传凭证响应异常: {payload}")
+    return data
+
+
+class StreamingMultipartForm:
+    def __init__(
+        self,
+        *,
+        boundary: str,
+        fields: list[tuple[str, str]],
+        file_field_name: str,
+        file_name: str,
+        file_content_type: str,
+        file_chunks: Any,
+        file_size: int,
+    ):
+        self.boundary = boundary
+        self.file_chunks = file_chunks
+        self.file_size = file_size
+        self._prefix = self._build_prefix(
+            fields=fields,
+            file_field_name=file_field_name,
+            file_name=file_name,
+            file_content_type=file_content_type,
+        )
+        self._suffix = f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+    def _build_prefix(
+        self,
+        *,
+        fields: list[tuple[str, str]],
+        file_field_name: str,
+        file_name: str,
+        file_content_type: str,
+    ) -> bytes:
+        parts: list[bytes] = []
+        for name, value in fields:
+            parts.append(
+                (
+                    f"--{self.boundary}\r\n"
+                    f'Content-Disposition: form-data; name="{name}"\r\n\r\n'
+                    f"{value}\r\n"
+                ).encode("utf-8")
+            )
+        parts.append(
+            (
+                f"--{self.boundary}\r\n"
+                f'Content-Disposition: form-data; name="{file_field_name}"; filename="{file_name}"\r\n'
+                f"Content-Type: {file_content_type}\r\n\r\n"
+            ).encode("utf-8")
+        )
+        return b"".join(parts)
+
+    def __iter__(self):
+        yield self._prefix
+        for chunk in self.file_chunks:
+            if chunk:
+                yield chunk
+        yield self._suffix
+
+    def __len__(self) -> int:
+        return len(self._prefix) + self.file_size + len(self._suffix)
+
+
+def _guess_media_content_type(source_url: str, response: requests.Response, filename: str) -> str:
+    content_type = (response.headers.get("Content-Type") or "").split(";")[0].strip()
+    if content_type:
+        return content_type
+    guessed, _ = mimetypes.guess_type(filename or source_url)
+    return guessed or "application/octet-stream"
+
+
+def stream_remote_media_to_dashscope_oss(
+    *,
+    source_url: str,
+    api_key: str,
+    model_name: str,
+    filename_hint: str,
+) -> str:
+    policy_data = get_dashscope_upload_policy(api_key, model_name)
+    with requests.Session() as media_session:
+        media_session.trust_env = False
+        with media_session.get(
+            _normalize_media_url(source_url),
+            headers=HEADERS,
+            timeout=120,
+            stream=True,
+            allow_redirects=True,
+        ) as media_response:
+            media_response.raise_for_status()
+            content_length = int(media_response.headers.get("Content-Length") or "0")
+            if content_length <= 0:
+                raise RuntimeError("远程媒体缺少 Content-Length，无法稳定上传到 DashScope 临时存储")
+
+            file_name = filename_hint or Path(urlparse(str(media_response.url)).path).name or f"{uuid.uuid4().hex}.bin"
+            content_type = _guess_media_content_type(source_url, media_response, file_name)
+            key = f"{policy_data['upload_dir'].rstrip('/')}/{file_name}"
+            form = StreamingMultipartForm(
+                boundary=f"dashscope-{uuid.uuid4().hex}",
+                fields=[
+                    ("OSSAccessKeyId", policy_data["oss_access_key_id"]),
+                    ("Signature", policy_data["signature"]),
+                    ("policy", policy_data["policy"]),
+                    ("x-oss-object-acl", policy_data["x_oss_object_acl"]),
+                    ("x-oss-forbid-overwrite", policy_data["x_oss_forbid_overwrite"]),
+                    ("key", key),
+                    ("success_action_status", "200"),
+                ],
+                file_field_name="file",
+                file_name=file_name,
+                file_content_type=content_type,
+                file_chunks=media_response.iter_content(chunk_size=1024 * 1024),
+                file_size=content_length,
+            )
+            with requests.Session() as upload_session:
+                upload_session.trust_env = False
+                upload_response = upload_session.post(
+                    policy_data["upload_host"],
+                    data=form,
+                    headers={
+                        "Content-Type": f"multipart/form-data; boundary={form.boundary}",
+                        "Content-Length": str(len(form)),
+                    },
+                    timeout=(60, 1800),
+                )
+            upload_response.raise_for_status()
+            return f"oss://{key}"
+
+
+def run_dashscope_multimodal_asr(*, oss_url: str, api_key: str, model: str) -> str:
+    import dashscope
+
+    dashscope.base_http_api_url = first_env("DASHSCOPE_BASE_URL", "BAILIAN_BASE_URL") or "https://dashscope.aliyuncs.com/api/v1"
+    response = dashscope.MultiModalConversation.call(
+        api_key=api_key,
+        model=model,
+        messages=[{"role": "user", "content": [{"audio": oss_url}]}],
+        result_format="message",
+        asr_options={
+            "language": "zh",
+            "enable_itn": False,
+        },
+    )
+    if getattr(response, "status_code", 200) != 200:
+        raise RuntimeError(getattr(response, "message", "DashScope 实时 ASR 调用失败"))
+    transcript = extract_dashscope_message_text(response)
+    if transcript:
+        return transcript
+    raise RuntimeError("DashScope 实时 ASR 返回空文本")
+
+
+def run_dashscope_filetrans_task(*, oss_url: str, api_key: str, model: str) -> str:
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "X-DashScope-Async": "enable",
+        "X-DashScope-OssResourceResolve": "enable",
+    }
+    submit_response = requests.post(
+        "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription",
+        headers=headers,
+        json={
+            "model": model,
+            "input": {"file_url": oss_url},
+            "parameters": {
+                "language": "zh",
+                "enable_itn": False,
+                "enable_words": True,
+                "channel_id": [0],
+            },
+        },
+        timeout=60,
+    )
+    submit_response.raise_for_status()
+    submit_payload = submit_response.json()
+    task_id = ((submit_payload.get("output") or {}).get("task_id"))
+    if not task_id:
+        raise RuntimeError(f"DashScope filetrans 未返回 task_id: {submit_payload}")
+
+    poll_interval = float(first_env("DASHSCOPE_FILETRANS_POLL_INTERVAL_SEC", "BAILIAN_FILETRANS_POLL_INTERVAL_SEC") or "5")
+    timeout_sec = float(first_env("DASHSCOPE_FILETRANS_TIMEOUT_SEC", "BAILIAN_FILETRANS_TIMEOUT_SEC") or "7200")
+    deadline = time.monotonic() + timeout_sec
+    last_payload: dict[str, Any] | None = None
+
+    while time.monotonic() < deadline:
+        poll_response = requests.get(
+            f"https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}",
+            headers=headers,
+            timeout=60,
+        )
+        poll_response.raise_for_status()
+        last_payload = poll_response.json()
+        output = last_payload.get("output") or {}
+        task_status = output.get("task_status")
+        if task_status == "SUCCEEDED":
+            transcript = _extract_dashscope_filetrans_text(output)
+            if transcript:
+                return transcript
+            raise RuntimeError(f"DashScope filetrans 成功但未返回文本: {last_payload}")
+        if task_status == "FAILED":
+            raise RuntimeError(f"DashScope filetrans 失败: {last_payload}")
+        time.sleep(poll_interval)
+
+    raise RuntimeError(f"DashScope filetrans 超时: {last_payload}")
+
+
+def _extract_dashscope_filetrans_text(output: dict[str, Any]) -> str:
+    result = output.get("result") or {}
+    transcription_url = result.get("transcription_url")
+    if transcription_url:
+        transcript_response = requests.get(transcription_url, timeout=60)
+        transcript_response.raise_for_status()
+        transcript_payload = transcript_response.json()
+        transcripts = transcript_payload.get("transcripts") or []
+        parts = [item.get("text", "").strip() for item in transcripts if item.get("text")]
+        return "\n".join(part for part in parts if part)
+
+    results = output.get("results") or []
+    for item in results:
+        transcription_url = item.get("transcription_url")
+        if transcription_url:
+            transcript_response = requests.get(transcription_url, timeout=60)
+            transcript_response.raise_for_status()
+            transcript_payload = transcript_response.json()
+            transcripts = transcript_payload.get("transcripts") or []
+            parts = [entry.get("text", "").strip() for entry in transcripts if entry.get("text")]
+            if parts:
+                return "\n".join(parts)
+    return ""
+
+
 def transcribe_audio_via_upload(*, audio_path: Path, api_url: str, api_key: str, model: str) -> str:
     files = {
         "file": (audio_path.name, open(audio_path, "rb"), "audio/mpeg"),
@@ -1003,7 +1298,35 @@ def parse_volcengine_server_message(message: bytes) -> dict[str, Any]:
     }
 
 
+# 抖音视频 CDN 域名列表，按优先级排序
+# zjcdn 灰度节点不稳定，主 CDN aweme.snssdk.com 更可靠
+_DOUYIN_CDN_REPLACEMENTS: list[tuple[str, str]] = [
+    # (待替换域名, 替换为)
+    ("v5-dy-o-abtest.zjcdn.com", "aweme.snssdk.com"),
+    ("v3-dy-o-abtest.zjcdn.com", "aweme.snssdk.com"),
+    ("v10-dy-o-abtest.zjcdn.com", "aweme.snssdk.com"),
+    ("v11-dy-o-abtest.zjcdn.com", "aweme.snssdk.com"),
+    ("v3.douyinvod.com", "aweme.snssdk.com"),
+    ("v2.douyinvod.com", "aweme.snssdk.com"),
+]
+
+
+def _rewrite_douyin_cdn(url: str) -> str:
+    """将抖音视频 URL 替换为更稳定的 CDN 节点"""
+    for old_host, new_host in _DOUYIN_CDN_REPLACEMENTS:
+        if old_host in url:
+            # 替换域名，保留路径和参数
+            parsed = urlparse(url)
+            rewritten = f"{parsed.scheme}://{new_host}{parsed.path}"
+            if parsed.query:
+                rewritten += f"?{parsed.query}"
+            return rewritten
+    return url
+
+
 def download_binary(url: str, destination: Path) -> Path:
+    # 优先使用稳定的 aweme.snssdk.com CDN
+    url = _rewrite_douyin_cdn(url)
     response = requests.get(_normalize_media_url(url), headers=HEADERS, timeout=60, stream=True)
     response.raise_for_status()
     with destination.open("wb") as file_obj:
@@ -1173,9 +1496,18 @@ def extract_message_text(payload: dict[str, Any]) -> str:
     if isinstance(content, list):
         parts = []
         for item in content:
-            if isinstance(item, dict) and item.get("type") == "text":
+            if isinstance(item, dict) and ("text" in item or item.get("type") == "text"):
                 parts.append(item.get("text", ""))
         return "\n".join(part for part in parts if part)
+    return ""
+
+
+def extract_dashscope_message_text(payload: Any) -> str:
+    if hasattr(payload, "output"):
+        payload = {"output": getattr(payload, "output")}
+    output = payload.get("output") if isinstance(payload, dict) else None
+    if isinstance(output, dict):
+        return extract_message_text(output)
     return ""
 
 

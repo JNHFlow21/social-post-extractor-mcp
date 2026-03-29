@@ -248,7 +248,7 @@ class SocialExtractorServiceTests(unittest.TestCase):
             self.assertIn("正文段落", result["script_preview"])
             self.assertIn("OCR:1:one.jpg", result["script_preview"])
 
-    def test_video_asr_failure_still_writes_partial_artifacts(self):
+    def test_video_asr_failure_raises_immediately(self):
         post = SocialPost(
             platform="douyin",
             content_type="video",
@@ -269,16 +269,12 @@ class SocialExtractorServiceTests(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            result = service.extract_social_post(
-                "https://v.douyin.com/demo/",
-                output_dir=tmpdir,
-                asr_provider="siliconflow",
-            )
-
-            self.assertEqual(result["info"]["status"], "partial_success")
-            self.assertIn("asr failed", result["info"]["error"])
-            script_text = Path(result["script_path"]).read_text(encoding="utf-8")
-            self.assertIn("只有正文也要落盘", script_text)
+            with self.assertRaisesRegex(RuntimeError, "视频转写失败: asr failed"):
+                service.extract_social_post(
+                    "https://v.douyin.com/demo/",
+                    output_dir=tmpdir,
+                    asr_provider="siliconflow",
+                )
 
     def test_openai_compatible_asr_provider_uses_provider_specific_upload_endpoint(self):
         post = SocialPost(
@@ -321,6 +317,88 @@ class SocialExtractorServiceTests(unittest.TestCase):
         self.assertEqual(kwargs["api_url"], "https://ark.example.com/audio/transcriptions")
         self.assertEqual(kwargs["api_key"], "ark-demo-key")
         self.assertEqual(kwargs["model"], "doubao-asr-demo")
+
+
+class DashScopeASRProviderTests(unittest.TestCase):
+    def test_short_videos_use_cloud_mirror_and_realtime_asr(self):
+        post = SocialPost(
+            platform="douyin",
+            content_type="video",
+            source_url="https://v.douyin.com/demo/",
+            resolved_url="https://www.iesdouyin.com/share/video/777",
+            post_id="777",
+            title="测试抖音视频",
+            duration_sec=20,
+            video_url="https://cdn.example.com/video.mp4",
+        )
+        context = ExtractionContext(
+            asr_provider="bailian",
+            asr_model="paraformer-v2",
+        )
+        provider = DashScopeASRProvider()
+
+        with (
+            patch.dict("os.environ", {"BAILIAN_API_KEY": "demo-key"}, clear=False),
+            patch("social_post_extractor_mcp.social_extractor.stream_remote_media_to_dashscope_oss") as mirror_media,
+            patch("social_post_extractor_mcp.social_extractor.run_dashscope_multimodal_asr") as run_realtime,
+            patch("social_post_extractor_mcp.social_extractor.run_dashscope_filetrans_task") as run_filetrans,
+        ):
+            mirror_media.return_value = "oss://dashscope-instant/demo/777.mp4"
+            run_realtime.return_value = "云端短视频转写"
+
+            transcript = provider.transcribe(post, context)
+
+        self.assertEqual(transcript, "云端短视频转写")
+        self.assertEqual(context.asr_model, "qwen3-asr-flash")
+        mirror_media.assert_called_once()
+        self.assertEqual(mirror_media.call_args.kwargs["source_url"], post.video_url)
+        self.assertEqual(mirror_media.call_args.kwargs["model_name"], "qwen3-asr-flash")
+        run_realtime.assert_called_once_with(
+            oss_url="oss://dashscope-instant/demo/777.mp4",
+            api_key="demo-key",
+            model="qwen3-asr-flash",
+        )
+        run_filetrans.assert_not_called()
+
+    def test_long_videos_use_cloud_mirror_and_filetrans(self):
+        post = SocialPost(
+            platform="douyin",
+            content_type="video",
+            source_url="https://v.douyin.com/demo/",
+            resolved_url="https://www.iesdouyin.com/share/video/999",
+            post_id="999",
+            title="测试长视频",
+            duration_sec=2036,
+            video_url="https://cdn.example.com/long.mp4",
+        )
+        context = ExtractionContext(
+            asr_provider="bailian",
+            asr_model="paraformer-v2",
+        )
+        provider = DashScopeASRProvider()
+
+        with (
+            patch.dict("os.environ", {"BAILIAN_API_KEY": "demo-key"}, clear=False),
+            patch("social_post_extractor_mcp.social_extractor.stream_remote_media_to_dashscope_oss") as mirror_media,
+            patch("social_post_extractor_mcp.social_extractor.run_dashscope_multimodal_asr") as run_realtime,
+            patch("social_post_extractor_mcp.social_extractor.run_dashscope_filetrans_task") as run_filetrans,
+        ):
+            mirror_media.return_value = "oss://dashscope-instant/demo/999.mp4"
+            run_filetrans.return_value = "云端长视频转写"
+
+            transcript = provider.transcribe(post, context)
+
+        self.assertEqual(transcript, "云端长视频转写")
+        self.assertEqual(context.asr_model, "qwen3-asr-flash-filetrans")
+        mirror_media.assert_called_once()
+        self.assertEqual(mirror_media.call_args.kwargs["source_url"], post.video_url)
+        self.assertEqual(mirror_media.call_args.kwargs["model_name"], "qwen3-asr-flash-filetrans")
+        run_filetrans.assert_called_once_with(
+            oss_url="oss://dashscope-instant/demo/999.mp4",
+            api_key="demo-key",
+            model="qwen3-asr-flash-filetrans",
+        )
+        run_realtime.assert_not_called()
 
 
 class ProviderConfigTests(unittest.TestCase):
