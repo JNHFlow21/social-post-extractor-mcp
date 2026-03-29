@@ -53,4 +53,3 @@ Issues = "https://github.com/JNHFlow21/social-post-extractor-mcp/issues"
 
 [project.scripts]
 social-post-extractor-mcp = "social_post_extractor_mcp.server:main"
-douyin-mcp-server = "douyin_mcp_server.server:main"
