@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560" role="img" aria-labelledby="title desc">
+  <title id="title">JNHFlow21/social-media-toolkit repository metrics</title>
+  <desc id="desc">Cumulative clone curve for the rolling 14-day Traffic window with stars, forks, commits, visitors, cloners, and clone totals.</desc>
+  <style>
+    .background { fill: #ffffff; }
+    .outline { fill: none; stroke: #171717; stroke-width: 2.4; }
+    .title { font: 700 30px ui-rounded, "Comic Sans MS", system-ui, sans-serif; fill: #171717; }
+    .subtitle { font: 500 15px ui-rounded, "Comic Sans MS", system-ui, sans-serif; fill: #666666; }
+    .section { font: 700 18px ui-rounded, "Comic Sans MS", system-ui, sans-serif; fill: #252525; }
+    .grid { stroke: #dedede; stroke-width: 1.2; stroke-dasharray: 5 7; }
+    .axis { font: 12px ui-rounded, "Comic Sans MS", system-ui, sans-serif; fill: #777777; }
+    .area { fill: #dff7e5; opacity: .76; }
+    .curve-echo { fill: none; stroke: #171717; stroke-width: 5.6; opacity: .12; stroke-linejoin: round; }
+    .curve { fill: none; stroke: #18a558; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+    .card-shadow { fill: #ececec; transform: translate(3px, 4px); }
+    .card { fill: #ffffff; stroke: #222222; stroke-width: 2; }
+    .metric-label { font: 650 11px ui-rounded, "Comic Sans MS", system-ui, sans-serif; fill: #555555; }
+    .metric-period { font: 600 9.5px ui-rounded, "Comic Sans MS", system-ui, sans-serif; fill: #888888; }
+    .metric-value { font: 800 28px ui-rounded, "Comic Sans MS", system-ui, sans-serif; fill: #171717; }
+    .empty { font: 600 16px ui-rounded, "Comic Sans MS", system-ui, sans-serif; fill: #888888; }
+    .footer { font: 12px ui-rounded, "Comic Sans MS", system-ui, sans-serif; fill: #666666; }
+  </style>
+  <rect class="background" width="960" height="560" rx="24"/>
+  <rect class="outline" x="12" y="12" width="936" height="536" rx="22"/>
+  <text x="54" y="61" class="title">Repository Pulse</text>
+  <text x="54" y="88" class="subtitle">JNHFlow21/social-media-toolkit · privacy-safe public activity</text>
+  <path d="M 844 45 v34 m-13 -13 13 13 13 -13 M 825 92 h38" fill="none" stroke="#18a558" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="64" y="128" class="section">Total clones over time · rolling 14 days</text>
+  <line x1="64.0" y1="442.0" x2="604.0" y2="442.0" class="grid"/><text x="50.0" y="447.0" text-anchor="end" class="axis">0</text><line x1="64.0" y1="296.0" x2="604.0" y2="296.0" class="grid"/><text x="50.0" y="301.0" text-anchor="end" class="axis">203</text><line x1="64.0" y1="150.0" x2="604.0" y2="150.0" class="grid"/><text x="50.0" y="155.0" text-anchor="end" class="axis">406</text>
+  <line x1="64.0" y1="442.0" x2="604.0" y2="442.0" class="outline"/>
+  <path d="M 64.0 442.0 L 64.0 442.0 L 64.0 420.4 L 105.5 420.4 L 105.5 394.5 L 147.1 394.5 L 147.1 382.3 L 188.6 382.3 L 188.6 363.6 L 230.2 363.6 L 230.2 347.1 L 271.7 347.1 L 271.7 328.4 L 313.2 328.4 L 313.2 322.6 L 354.8 322.6 L 354.8 304.6 L 396.3 304.6 L 396.3 295.3 L 437.8 295.3 L 437.8 237.7 L 479.4 237.7 L 479.4 221.9 L 520.9 221.9 L 520.9 204.7 L 562.5 204.7 L 562.5 171.6 L 604.0 171.6 L 604.0 150.0 L 604.0 150.0 L 604.0 442.0 Z" class="area"/>
+  <path d="M 64.0 442.0 L 64.0 442.0 L 64.0 420.4 L 105.5 420.4 L 105.5 394.5 L 147.1 394.5 L 147.1 382.3 L 188.6 382.3 L 188.6 363.6 L 230.2 363.6 L 230.2 347.1 L 271.7 347.1 L 271.7 328.4 L 313.2 328.4 L 313.2 322.6 L 354.8 322.6 L 354.8 304.6 L 396.3 304.6 L 396.3 295.3 L 437.8 295.3 L 437.8 237.7 L 479.4 237.7 L 479.4 221.9 L 520.9 221.9 L 520.9 204.7 L 562.5 204.7 L 562.5 171.6 L 604.0 171.6 L 604.0 150.0 L 604.0 150.0" class="curve-echo"/>
+  <path d="M 64.0 442.0 L 64.0 442.0 L 64.0 420.4 L 105.5 420.4 L 105.5 394.5 L 147.1 394.5 L 147.1 382.3 L 188.6 382.3 L 188.6 363.6 L 230.2 363.6 L 230.2 347.1 L 271.7 347.1 L 271.7 328.4 L 313.2 328.4 L 313.2 322.6 L 354.8 322.6 L 354.8 304.6 L 396.3 304.6 L 396.3 295.3 L 437.8 295.3 L 437.8 237.7 L 479.4 237.7 L 479.4 221.9 L 520.9 221.9 L 520.9 204.7 L 562.5 204.7 L 562.5 171.6 L 604.0 171.6 L 604.0 150.0 L 604.0 150.0" class="curve"/>
+  
+  <text x="64.0" y="466.0" class="axis">2026-07-28</text>
+  <text x="604.0" y="466.0" text-anchor="end" class="axis">2026-08-10</text>
+  <g transform="translate(650 154)"><rect width="128" height="84" rx="17" class="card-shadow"/><rect width="128" height="84" rx="17" class="card"/><text x="15" y="25" class="metric-label">Stars</text><text x="15" y="70" class="metric-value">30</text></g><g transform="translate(792 154)"><rect width="128" height="84" rx="17" class="card-shadow"/><rect width="128" height="84" rx="17" class="card"/><text x="15" y="25" class="metric-label">Forks</text><text x="15" y="70" class="metric-value">2</text></g><g transform="translate(650 258)"><rect width="128" height="84" rx="17" class="card-shadow"/><rect width="128" height="84" rx="17" class="card"/><text x="15" y="25" class="metric-label">Commits</text><text x="15" y="70" class="metric-value">41</text></g><g transform="translate(792 258)"><rect width="128" height="84" rx="17" class="card-shadow"/><rect width="128" height="84" rx="17" class="card"/><text x="15" y="25" class="metric-label">Unique visitors</text><text x="15" y="40" class="metric-period">14d</text><text x="15" y="70" class="metric-value">84</text></g><g transform="translate(650 362)"><rect width="128" height="84" rx="17" class="card-shadow"/><rect width="128" height="84" rx="17" class="card"/><text x="15" y="25" class="metric-label">Unique cloners</text><text x="15" y="40" class="metric-period">14d</text><text x="15" y="70" class="metric-value">189</text></g><g transform="translate(792 362)"><rect width="128" height="84" rx="17" class="card-shadow"/><rect width="128" height="84" rx="17" class="card"/><text x="15" y="25" class="metric-label">Total clones</text><text x="15" y="40" class="metric-period">14d</text><text x="15" y="70" class="metric-value">406</text></g>
+  <text x="54" y="520" class="footer">Stars, forks, and commits auto-refresh · GitHub Traffic owner snapshot: 2026-08-11 · Updated 2026-09-07 UTC</text>
+</svg>
